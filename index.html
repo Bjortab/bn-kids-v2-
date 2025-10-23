@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BN Kids v2 – Sagogenerator</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(180deg, #ffe5b4, #ffd699);
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      color: #ff6600;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .container {
+      max-width: 700px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      margin: 20px;
+      text-align: center;
+    }
+
+    select, input, button {
+      font-size: 1rem;
+      padding: 10px;
+      margin: 8px;
+      border-radius: 8px;
+      border: 2px solid #ff9900;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    button {
+      background-color: #ff9900;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background-color: #ff6600;
+    }
+
+    #story-output {
+      white-space: pre-wrap;
+      text-align: left;
+      margin-top: 20px;
+      background: #fffbe6;
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid #ffcc80;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    #status {
+      font-style: italic;
+      color: #777;
+      margin-top: 10px;
+    }
+
+    /* Växlingsknapp mellan BN Kids-versioner */
+    #version-switcher {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 9999;
+    }
+
+    #switch-version {
+      background: linear-gradient(90deg, #ff9a00, #ff6600);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      transition: background 0.3s ease;
+    }
+
+    #switch-version:hover {
+      background: linear-gradient(90deg, #ff6600, #ff3300);
+    }
+
+    #audio-controls {
+      margin-top: 15px;
+    }
+
+    #cache-info {
+      margin-top: 15px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <!-- Växlingsknapp mellan BN Kids Classic och v2 -->
+  <div id="version-switcher">
+    <button id="switch-version" onclick="toggleVersion()">Byt till BN-Kids Classic</button>
+  </div>
+
+  <div class="container">
+    <h1>✨ BN Kids v2 ✨</h1>
+    <p>Skapa din egen saga med AI och röstuppläsning</p>
+
+    <label for="age">Välj ålder:</label><br>
+    <select id="age">
+      <option value="1-2">1–2 år</option>
+      <option value="3-4">3–4 år</option>
+      <option value="5-6">5–6 år</option>
+      <option value="7-8">7–8 år</option>
+      <option value="9-10">9–10 år</option>
+      <option value="11-12">11–12 år</option>
+    </select><br>
+
+    <label for="prompt">Vad ska sagan handla om?</label><br>
+    <input id="prompt" type="text" placeholder="T.ex. en modig tax i rymden 🐕🚀" />
+
+    <button id="generate-btn">🎨 Skapa & Läs upp</button>
+    <button id="voice-btn">🎙️ Tala in i stället</button>
+
+    <div id="status"></div>
+    <div id="story-output"></div>
+
+    <div id="audio-controls">
+      <audio id="audio-player" controls></audio>
+    </div>
+
+    <div id="cache-info"></div>
+  </div>
+
+  <script>
+    // Funktion för växling mellan Classic och v2
+    function toggleVersion() {
+      const currentUrl = window.location.hostname;
+      if (currentUrl.includes("v2")) {
+        window.location.href = "https://bn-kids.pages.dev";
+      } else {
+        window.location.href = "https://bn-kids-v2.pages.dev";
+      }
+    }
+  </script>
+
+  <script src="app.js"></script>
+</body>
+</html>
