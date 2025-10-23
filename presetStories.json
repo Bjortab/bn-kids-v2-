@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Taxen Tage och den försvunna bollen",
+    "story": "Tage vaknade en solig morgon. Hans röda boll var borta! Han nosade i köket, under sängen och ute i trädgården. Där låg bollen bakom busken! Tage skällde glatt och rullade den hem igen. Byt sida.",
+    "images": [
+      {"url":"/images/tage1.jpg","tags":["tax","trädgård"]},
+      {"url":"/images/tage2.jpg","tags":["boll","hund"]}
+    ]
+  },
+  {
+    "title": "Draken Holger och Molnlandet",
+    "story": "Draken Holger flög högt upp bland molnen. Han såg regnbågen och log. Men oj! En bit av regnbågen saknades. Holger blåste försiktigt färg på den tills den glittrade igen. Byt sida.",
+    "images": [
+      {"url":"/images/holger1.jpg","tags":["drake","regnbåge"]},
+      {"url":"/images/holger2.jpg","tags":["moln","flyga"]}
+    ]
+  },
+  {
+    "title": "Prinsessan Ruth och den magiska nyckeln",
+    "story": "Prinsessan Ruth tappade sin nyckel till sagoslottet. Hon letade och letade. Till slut hittade hon den i en blomma som sjöng. Dörren öppnades och alla sagor flög ut! Byt sida.",
+    "images": [
+      {"url":"/images/ruth1.jpg","tags":["prinsessa","slott"]},
+      {"url":"/images/ruth2.jpg","tags":["blomma","magisk"]}
+    ]
+  }
+]
