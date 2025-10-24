@@ -1,161 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="sv">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BN Kids v2 – Sagogenerator</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BN Kids v2 — Sagogenerator</title>
   <style>
-    body {
-      font-family: 'Comic Sans MS', cursive, sans-serif;
-      background: linear-gradient(180deg, #ffe5b4, #ffd699);
-      color: #333;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-
-    h1 {
-      color: #ff6600;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    }
-
-    .container {
-      max-width: 700px;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      margin: 20px;
-      text-align: center;
-    }
-
-    select, input, button {
-      font-size: 1rem;
-      padding: 10px;
-      margin: 8px;
-      border-radius: 8px;
-      border: 2px solid #ff9900;
-      width: 90%;
-      max-width: 400px;
-    }
-
-    button {
-      background-color: #ff9900;
-      color: white;
-      cursor: pointer;
-      font-weight: bold;
-      transition: 0.3s;
-    }
-
-    button:hover {
-      background-color: #ff6600;
-    }
-
-    #story-output {
-      white-space: pre-wrap;
-      text-align: left;
-      margin-top: 20px;
-      background: #fffbe6;
-      padding: 15px;
-      border-radius: 10px;
-      border: 1px solid #ffcc80;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    #status {
-      font-style: italic;
-      color: #777;
-      margin-top: 10px;
-    }
-
-    /* Växlingsknapp mellan BN Kids-versioner */
-    #version-switcher {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 9999;
-    }
-
-    #switch-version {
-      background: linear-gradient(90deg, #ff9a00, #ff6600);
-      border: none;
-      border-radius: 6px;
-      color: white;
-      padding: 8px 14px;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      transition: background 0.3s ease;
-    }
-
-    #switch-version:hover {
-      background: linear-gradient(90deg, #ff6600, #ff3300);
-    }
-
-    #audio-controls {
-      margin-top: 15px;
-    }
-
-    #cache-info {
-      margin-top: 15px;
-      font-size: 0.9rem;
-      color: #666;
-    }
+    body{background:#0f1218;color:#e8f0ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;margin:0}
+    .wrap{max-width:900px;margin:32px auto;padding:0 16px}
+    h1{font-size:28px;margin:0 0 6px}
+    .sub{opacity:.7;margin:0 0 18px}
+    .card{background:#1a1f2b;border:1px solid #283044;border-radius:12px;padding:16px 16px 6px}
+    label{display:block;font-size:13px;margin:10px 0 6px;opacity:.9}
+    select,textarea,input[type=text]{width:100%;box-sizing:border-box;background:#121621;color:#e8f0ff;border:1px solid #30384c;border-radius:8px;padding:10px 12px}
+    textarea{min-height:90px;resize:vertical}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .col{flex:1 1 260px}
+    .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+    .btn{background:#13b36b;border:none;color:#061015;font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn.secondary{background:#33405c;color:#e8f0ff}
+    .btn.warn{background:#c93a3a;color:white}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .hint{font-size:12px;opacity:.7}
+    .meters{display:flex;gap:12px;align-items:center}
+    .meters input[type=range]{width:220px}
+    .status{min-height:20px;margin:6px 0 0;font-size:13px}
+    .spinner{display:none;gap:8px;align-items:center}
+    .dot{width:7px;height:7px;border-radius:50%;background:#13b36b;opacity:.3;animation:b 1.2s infinite}
+    .dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+    @keyframes b{0%,80%,100%{opacity:.3}40%{opacity:1}}
+    .out{white-space:pre-wrap;background:#111521;border:1px solid #30384c;border-radius:10px;padding:14px;margin-top:12px}
+    audio{width:100%;margin-top:10px}
+    .topbar{display:flex;justify-content:space-between;align-items:center}
+    a.link{color:#8bd7ff;text-decoration:none}
   </style>
 </head>
 <body>
-  <!-- Växlingsknapp mellan BN Kids Classic och v2 -->
-  <div id="version-switcher">
-    <button id="switch-version" onclick="toggleVersion()">Byt till BN-Kids Classic</button>
-  </div>
-
-  <div class="container">
-    <h1>✨ BN Kids v2 ✨</h1>
-    <p>Skapa din egen saga med AI och röstuppläsning</p>
-
-    <label for="age">Välj ålder:</label><br>
-    <select id="age">
-      <option value="1-2">1–2 år</option>
-      <option value="3-4">3–4 år</option>
-      <option value="5-6">5–6 år</option>
-      <option value="7-8">7–8 år</option>
-      <option value="9-10">9–10 år</option>
-      <option value="11-12">11–12 år</option>
-    </select><br>
-
-    <label for="prompt">Vad ska sagan handla om?</label><br>
-    <input id="prompt" type="text" placeholder="T.ex. en modig tax i rymden 🐕🚀" />
-
-    <button id="generate-btn">🎨 Skapa & Läs upp</button>
-    <button id="voice-btn">🎙️ Tala in i stället</button>
-
-    <div id="status"></div>
-    <div id="story-output"></div>
-
-    <div id="audio-controls">
-      <audio id="audio-player" controls></audio>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>BN’s Sagovärld</h1>
+        <div class="sub">…där drömmar blir berättelser</div>
+      </div>
+      <div><a class="link" href="https://kids-bn.pages.dev" target="_blank">Byt till BN-Kids Classic ↗</a></div>
     </div>
 
-    <div id="cache-info"></div>
+    <div class="card">
+      <div class="row">
+        <div class="col">
+          <label>Ålder</label>
+          <select id="age">
+            <option>1–2 år</option>
+            <option>3–4 år</option>
+            <option>5–6 år</option>
+            <option>7–8 år</option>
+            <option>9–10 år</option>
+            <option>11–12 år</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Hjälte (valfritt)</label>
+          <input id="hero" type="text" placeholder="t.ex. Taxen Tage, Draken Holger"/>
+        </div>
+      </div>
+
+      <label>Sagognista (skriv eller tala in)</label>
+      <textarea id="prompt" placeholder="t.ex. en modig tax i rymden ✨"></textarea>
+
+      <div class="row">
+        <div class="col">
+          <label>Röst (svenska)</label>
+          <select id="voice">
+            <option value="">Auto (från miljövariabel)</option>
+            <option value="sv-SE-Wavenet-A">sv-SE-Wavenet-A (kvinna)</option>
+            <option value="sv-SE-Wavenet-B">sv-SE-Wavenet-B (man)</option>
+            <option value="sv-SE-Wavenet-C">sv-SE-Wavenet-C (kvinna)</option>
+            <option value="sv-SE-Wavenet-D">sv-SE-Wavenet-D (man)</option>
+            <option value="sv-SE-Standard-A">sv-SE-Standard-A</option>
+            <option value="sv-SE-Standard-B">sv-SE-Standard-B</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Talhastighet</label>
+          <select id="rate">
+            <option value="1">Standard (1.0)</option>
+            <option value="0.95">0.95</option>
+            <option value="0.9">0.90</option>
+            <option value="0.85">0.85</option>
+            <option value="1.05">1.05</option>
+            <option value="1.1">1.10</option>
+            <option value="1.15">1.15</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="meters">
+        <label>Pitch</label>
+        <input id="pitch" type="range" min="-6" max="6" step="0.5" value="0"/>
+        <span class="hint" id="pitchVal">0 st</span>
+
+        <label style="margin-left:18px">Volym</label>
+        <input id="gain" type="range" min="-6" max="6" step="0.5" value="0"/>
+        <span class="hint" id="gainVal">0 dB</span>
+      </div>
+
+      <div class="controls">
+        <button id="btnSpeak" class="btn secondary">🎙️ Tala in</button>
+        <button id="btnMake" class="btn">✨ Skapa saga + uppläsning</button>
+        <button id="btnPlay" class="btn secondary" disabled>▶️ Spela igen</button>
+        <button id="btnTest" class="btn secondary">🔊 Testa röst</button>
+        <div class="spinner" id="spin"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div>
+        <label>Berättelse</label>
+        <div id="out" class="out"></div>
+        <audio id="audio" controls></audio>
+      </div>
+    </div>
   </div>
 
-  <script>
-    // Funktion för växling mellan Classic och v2
-    function toggleVersion() {
-      const currentUrl = window.location.hostname;
-      if (currentUrl.includes("v2")) {
-        window.location.href = "https://bn-kids.pages.dev";
-      } else {
-        window.location.href = "https://bn-kids-v2.pages.dev";
-      }
-    }
-  </script>
-
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
