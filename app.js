@@ -1,77 +1,144 @@
-(() => {
-  const $ = s => document.querySelector(s);
-  const childName = $('#childName');
-  const ageRange  = $('#ageRange');
-  const promptEl  = $('#prompt');
-  const promptWrap= $('#promptWrap');
-  const btnGen    = $('#btnGenerate');
-  const statusEl  = $('#status');
-  const resultTxt = $('#resultText');
-  const resultAud = $('#resultAudio');
-  const ttsSpin   = $('#ttsSpinner');
-  const cacheWrap = $('#cacheWrap');
-  const cacheBar  = $('#cacheBar');
-  const cacheText = $('#cacheText');
-  const storyImgs = $('#storyImages');
+// app.js – BN Kids v2 frontend
+const el = (id) => document.getElementById(id);
 
-  let busy = false;
-  const setBusy = (b,msg='')=>{
-    busy=b; btnGen.disabled=b; setStatus(msg);
-    ttsSpin.style.display = b ? 'inline-block' : 'none';
-  };
-  const setStatus=(m,t='')=>{
-    statusEl.textContent=m||''; statusEl.style.color=t==='error'?'#b00':t==='ok'?'#070':'#222';
-  };
-  const updateCacheMeter=(hits,total)=>{
-    const ratio = total>0 ? hits/total : 0;
-    const pct = Math.round(ratio*100);
-    cacheBar.style.width = pct+'%';
-    cacheText.textContent = `Återanvänt: ${pct}%`;
-    cacheWrap.style.display = 'block';
-  };
+const age = el('age');
+const hero = el('hero');
+const promptBox = el('prompt');
 
-  ageRange.addEventListener('change',()=>{
-    const val = ageRange.value;
-    promptWrap.style.display = (val==='1-2') ? 'none':'block';
-  });
+const voice = el('voice');
+const rate = el('rate');
+const pitch = el('pitch');
+const gain = el('gain');
+const pitchVal = el('pitchVal');
+const gainVal = el('gainVal');
 
-  btnGen.addEventListener('click', async ()=>{
-    if(busy) return;
-    const age = ageRange.value;
-    const payload = {
-      childName: childName.value.trim(),
-      ageRange: age,
-      prompt: promptEl.value.trim()
+const btnSpeak = el('btnSpeak');
+const btnMake  = el('btnMake');
+const btnPlay  = el('btnPlay');
+const btnTest  = el('btnTest');
+
+const spin  = el('spin');
+const status = el('status');
+const out = el('out');
+const audio = el('audio');
+
+let lastAudioBlob = null;
+let currentText = "";
+
+// UI helpers
+function working(on, msg="Arbetar …") {
+  spin.style.display = on ? 'inline-flex' : 'none';
+  btnMake.disabled = on;
+  btnTest.disabled = on;
+  btnSpeak.disabled = on;
+  status.textContent = on ? msg : "";
+}
+
+function showError(e) {
+  console.error(e);
+  status.innerHTML = `<span style="color:#ff8a8a">Fel: ${typeof e==='string'?e:(e.message||'okänt fel')}</span>`;
+}
+
+// live labels
+pitch.addEventListener('input', () => pitchVal.textContent = `${pitch.value} st`);
+gain.addEventListener('input', () => gainVal.textContent = `${gain.value} dB`);
+
+// ---- SPEAK PLACEHOLDER (tills vi kopplar STT) ----
+btnSpeak.addEventListener('click', () => {
+  alert('Tala in kommer strax (vi kopplar Google STT). Skriv gärna gnistan så länge ✨');
+});
+
+// ---- TESTA RÖST ----
+btnTest.addEventListener('click', async () => {
+  try {
+    working(true, 'Skapar teströst …');
+    const body = {
+      text: "Hej! Jag är din högläsningsröst i BN Kids.",
+      voice: voice.value || undefined,
+      rate: parseFloat(rate.value),
+      pitch: parseFloat(pitch.value),
+      gainDb: parseFloat(gain.value)
     };
+    const res = await fetch('/tts', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(`TTS ${res.status}: ${t}`);
+    }
+    const blob = await res.blob();
+    lastAudioBlob = blob;
+    audio.src = URL.createObjectURL(blob);
+    audio.play().catch(()=>{});
+    btnPlay.disabled = false;
+  } catch (e) {
+    showError(e);
+  } finally {
+    working(false);
+  }
+});
 
-    resultTxt.textContent=''; resultAud.hidden=true; storyImgs.innerHTML='';
-    setBusy(true,'Skapar saga…');
+// ---- SKAPA SAGA + UPPLÄSNING ----
+btnMake.addEventListener('click', async () => {
+  try {
+    working(true, 'Skapar saga …');
+    status.textContent = 'Skapar saga …';
 
-    try {
-      const res = await fetch('/api/generate_story', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      if(!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+    // 1) Generera saga
+    const storyRes = await fetch('/api/generate_story', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({
+        age: age.value,
+        hero: hero.value.trim() || null,
+        prompt: promptBox.value.trim() || null
+      })
+    });
+    if(!storyRes.ok){
+      const t = await storyRes.text();
+      throw new Error(`Story ${storyRes.status}: ${t}`);
+    }
+    const { ok, story, error } = await storyRes.json();
+    if(!ok) throw new Error(error || 'Kunde inte skapa berättelse');
 
-      if(data.story) resultTxt.textContent=data.story;
-      if(data.images) data.images.forEach(i=>{
-        const img=document.createElement('img');
-        img.src=i.url; img.alt=i.tags?.join(', ')||'';
-        storyImgs.appendChild(img);
-      });
+    currentText = story;
+    out.textContent = story;
 
-      setStatus('Skapar uppläsning…');
-      const resTTS = await fetch('/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:data.story})});
-      if(!resTTS.ok) throw new Error(await resTTS.text());
-      const hits=parseInt(resTTS.headers.get('x-tts-hits')||'0',10);
-      const total=parseInt(resTTS.headers.get('x-tts-total')||'0',10);
-      if(!Number.isNaN(total)) updateCacheMeter(hits,total);
-      const blob=await resTTS.blob(); const url=URL.createObjectURL(blob);
-      resultAud.src=url; resultAud.hidden=false; await resultAud.play();
-      setStatus('Klar!','ok');
-    }catch(e){ setStatus(e.message,'error'); }
-    finally{ setBusy(false); }
-  });
-})();
+    // 2) TTS (Google)
+    status.textContent = 'Skapar uppläsning …';
+    const ttsRes = await fetch('/tts', {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({
+        text: story,
+        voice: voice.value || undefined,
+        rate: parseFloat(rate.value),
+        pitch: parseFloat(pitch.value),
+        gainDb: parseFloat(gain.value)
+      })
+    });
+    if(!ttsRes.ok){
+      const t = await ttsRes.text();
+      throw new Error(`TTS ${ttsRes.status}: ${t}`);
+    }
+    const blob = await ttsRes.blob();
+    lastAudioBlob = blob;
+    audio.src = URL.createObjectURL(blob);
+    await audio.play().catch(()=>{});
+    btnPlay.disabled = false;
+    status.textContent = 'Klart!';
+  } catch (e) {
+    showError(e);
+  } finally {
+    working(false);
+  }
+});
+
+// ---- SPELA IGEN ----
+btnPlay.addEventListener('click', () => {
+  if(lastAudioBlob){
+    audio.play().catch(()=>{});
+  }
+});
