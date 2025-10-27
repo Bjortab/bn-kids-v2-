@@ -1,99 +1,53 @@
-// === Konfigurera så det matchar classic ===
-const STORY_URL = "/api/story";   // ÄNDRA vid behov: "/story"
-const TTS_URL   = "/api/tts_vertex"; // pekar på vår nya Google-TTS endpoint
+// /public/app.js
+document.addEventListener("DOMContentLoaded", () => {
+  const btnGenerate = document.querySelector("#btnGenerate");
+  const btnSpeak = document.querySelector("#btnSpeak");
+  const textInput = document.querySelector("#prompt");
+  const storyBox = document.querySelector("#story");
+  const audioEl = document.querySelector("#player") || new Audio();
+  const spinner = document.querySelector(".spinner");
 
-// === Hjälpare ===
-const $ = (id) => document.getElementById(id);
-const showSpinner = (b) => { $('spinner').style.display = b ? 'flex' : 'none'; };
-const showErr = (msg) => { const e=$('error'); e.style.display='block'; e.textContent=msg; };
-const clearErr = () => { const e=$('error'); e.style.display='none'; e.textContent=''; };
-const getForm = () => ({
-  age: $('age').value,
-  hero: $('hero').value.trim(),
-  prompt: $('prompt').value.trim(),
-  voice: $('voice').value,
-  rate: parseFloat($('rate').value || "1.0"),
-  pitch: parseFloat($('pitch').value || "0")
-});
+  async function generateStory() {
+    const prompt = textInput.value.trim();
+    if (!prompt) return alert("Skriv något i sagorutan först.");
 
-// Render story
-function renderStory(text){
-  $('story').classList.remove('muted');
-  $('story').textContent = text || '';
-}
-
-// Play audio blob
-async function playBlob(blob){
-  const url = URL.createObjectURL(blob);
-  $('audio').src = url;
-  $('audio').play().catch(()=>{ /* user gesture */ });
-}
-
-async function createStory(payload){
-  clearErr(); showSpinner(true);
-  try {
-    const r = await fetch(STORY_URL, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    });
-    if (!r.ok) throw new Error(await r.text());
-    const data = await r.json();
-    renderStory(data.story || data.text || "");
-    return (data.story || data.text || "");
-  } catch (e) {
-    showErr("Kunde inte skapa saga:\n" + e.message);
-    return "";
-  } finally {
-    showSpinner(false);
-  }
-}
-
-async function speak(text, opts){
-  if(!text) { showErr("Ingen text att läsa upp."); return; }
-  clearErr(); showSpinner(true);
-  try {
-    const r = await fetch(TTS_URL, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        text,
-        voice: opts.voice,
-        speakingRate: opts.rate,
-        pitch: opts.pitch,
-        audioEncoding: "MP3"
-      })
-    });
-    if(!r.ok){
-      let t=""; try{t=await r.text();}catch{}
-      throw new Error(t || `HTTP ${r.status}`);
+    if (spinner) spinner.style.display = "inline-block";
+    try {
+      const res = await fetch("/api/generate_story", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.story) throw new Error(data.error || "Fel vid sagogenerering");
+      storyBox.textContent = data.story;
+    } catch (err) {
+      alert("Fel: " + err.message);
+    } finally {
+      if (spinner) spinner.style.display = "none";
     }
-    const blob = await r.blob();
-    await playBlob(blob);
-  } catch (e){
-    showErr("TTS fel:\n" + e.message);
-  } finally {
-    showSpinner(false);
   }
-}
 
-// === Knappar ===
-$('btnCreateRead').onclick = async () => {
-  const f = getForm();
-  const story = await createStory({ prompt: f.prompt, age: f.age, hero: f.hero });
-  if (story) await speak(story, f);
-};
+  async function readStory() {
+    const text = storyBox.textContent.trim();
+    if (!text) return alert("Ingen saga att läsa upp.");
 
-$('btnSpeakOnly').onclick = async () => {
-  const f = getForm();
-  const story = $('story').textContent.trim();
-  await speak(story, f);
-};
+    if (spinner) spinner.style.display = "inline-block";
+    try {
+      await window.bnTTS.speakToAudio(text, audioEl, {
+        languageCode: "sv-SE",
+        voiceName: "sv-SE-Wavenet-B",
+        speakingRate: 1.0,
+        pitch: 0.0,
+        volumeGainDb: 0.0
+      });
+    } catch (e) {
+      alert("TTS-fel: " + e.message);
+    } finally {
+      if (spinner) spinner.style.display = "none";
+    }
+  }
 
-$('btnTestVoice').onclick = async () => {
-  const f = getForm();
-  await speak("Detta är ett röstprov i BN Kids.", f);
-};
-
-// (Micken/“Tala in”-knappen kopplas senare, lämnas tom för nu)
-// $('btnSpeak').onclick = () => {};
+  if (btnGenerate) btnGenerate.addEventListener("click", generateStory);
+  if (btnSpeak) btnSpeak.addEventListener("click", readStory);
+});
