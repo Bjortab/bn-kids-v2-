@@ -1,95 +1,123 @@
-import { GoogleAuth } from "google-auth-library";
+// functions/api/tts_vertex.js
+export async function onRequestPost(ctx) {
+  const { request, env } = ctx;
 
-// Hämta nyckel från Cloudflare Secret (du har lagt in den som GOOGLE_TTS_KEY)
-const googleKey = JSON.parse(process.env.GOOGLE_TTS_KEY || "{}");
+  // === Läs input ===
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: "Invalid JSON" }, 400); }
 
-// Initiera autentisering
-const auth = new GoogleAuth({
-  credentials: googleKey,
-  scopes: ["https://www.googleapis.com/auth/cloud-platform"]
-});
+  const text = (body.text || "").toString().trim();
+  if (!text) return json({ error: "Missing 'text'" }, 400);
 
-const GOOGLE_TTS_ENDPOINT =
-  "https://texttospeech.googleapis.com/v1/text:synthesize";
+  const voiceName = body.voice || "sv-SE-Wavenet-B";
+  const speakingRate = clamp(parseFloat(body.speakingRate ?? 1.0), 0.25, 4.0);
+  const pitch = clamp(parseFloat(body.pitch ?? 0), -20, 20); // semitones
+  const audioEncoding = (body.audioEncoding || "MP3").toUpperCase();
 
-/**
- * Genererar TTS med Google Cloud (Chirp 3 HD / WaveNet / Neural2)
- * @param {Object} params - inställningar
- * @param {string} params.text - Texten som ska läsas upp
- * @param {string} [params.voice="sv-SE-Standard-A"] - Rösten
- * @param {string} [params.model="chirp"] - Typ av modell (chirp / wavenet / neural2)
- * @param {string} [params.lang="sv-SE"] - Språk
- * @param {string} [params.format="MP3"] - Utdataformat
- * @returns {Promise<Blob>} - MP3-ljudfil som Blob
- */
-export async function synthesizeTTS({
-  text,
-  voice = "sv-SE-Standard-A",
-  model = "chirp",
-  lang = "sv-SE",
-  format = "MP3"
-}) {
-  if (!text || text.trim().length === 0) {
-    throw new Error("Ingen text angiven för TTS.");
+  // === API key krävs ===
+  const apiKey = env.GCP_TTS_API_KEY;
+  if (!apiKey) return json({ error: "Missing env GCP_TTS_API_KEY" }, 500);
+
+  // === Cache-nyckel (hash på text + voice + params) ===
+  const cacheKey = await sha1Hex(JSON.stringify({ text, voiceName, speakingRate, pitch, audioEncoding }));
+
+  // 1) Edge cache (Pages cache API)
+  const cache = caches.default;
+  const cacheReq = new Request(new URL(`/__tts_cache/${cacheKey}`, new URL(request.url).origin), { method: "GET" });
+  let cached = await cache.match(cacheReq);
+  if (cached) {
+    return addCacheHeaders(cached);
   }
 
-  const client = await auth.getClient();
-  const token = await client.getAccessToken();
-
-  const body = {
-    input: { text },
-    voice: {
-      languageCode: lang,
-      name:
-        model === "chirp"
-          ? "sv-SE-Chirp-3-HD"
-          : model === "wavenet"
-          ? "sv-SE-Wavenet-A"
-          : "sv-SE-Neural2-A"
-    },
-    audioConfig: { audioEncoding: format }
-  };
-
-  const res = await fetch(GOOGLE_TTS_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token.token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`TTS-fel: ${res.status} – ${errText}`);
-  }
-
-  const data = await res.json();
-  const audioBuffer = Buffer.from(data.audioContent, "base64");
-  return audioBuffer;
-}
-
-/**
- * Cloudflare Worker-kompatibel hantering (om du kör via API-route)
- */
-export default {
-  async fetch(request, env) {
-    try {
-      const url = new URL(request.url);
-      if (url.pathname === "/api/tts_vertex") {
-        const { text, voice, model, lang } = await request.json();
-        const audioBuffer = await synthesizeTTS({ text, voice, model, lang });
-
-        return new Response(audioBuffer, {
-          headers: {
-            "Content-Type": "audio/mpeg",
-            "Cache-Control": "public, max-age=31536000"
-          }
-        });
-      }
-      return new Response("Not Found", { status: 404 });
-    } catch (err) {
-      return new Response(`TTS error: ${err.message}`, { status: 500 });
+  // 2) R2 cache (om bunden)
+  if (env.BN_AUDIO) {
+    const obj = await env.BN_AUDIO.get(`tts/${cacheKey}.mp3`);
+    if (obj) {
+      const res = new Response(obj.body, {
+        headers: { "Content-Type": "audio/mpeg" }
+      });
+      // lägg även i edge cache
+      await cache.put(cacheReq, res.clone());
+      return addCacheHeaders(res);
     }
   }
-};
+
+  // === Google TTS v1 ===
+  const apiURL = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(apiKey)}`;
+
+  const payload = {
+    input: { text },
+    // sv-SE röster (Wavenet/Neural2). Du kan även specificera languageCode separat.
+    voice: { name: voiceName, languageCode: "sv-SE" },
+    audioConfig: {
+      audioEncoding,             // "MP3" | "OGG_OPUS" | "LINEAR16"
+      speakingRate,              // 0.25–4.0
+      pitch,                     // -20.0–20.0 semitones
+      volumeGainDb: 0.0          // -96.0–16.0 (om du vill justera)
+    }
+  };
+
+  const googleResp = await fetch(apiURL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!googleResp.ok) {
+    const errText = await googleResp.text().catch(() => "");
+    return json({ ok:false, provider:"google-tts", error: errText || `HTTP ${googleResp.status}` }, 500);
+  }
+
+  const data = await googleResp.json();
+  if (!data.audioContent) {
+    return json({ ok:false, error:"No audioContent from Google TTS" }, 500);
+  }
+
+  const bin = base64ToUint8Array(data.audioContent);
+  const res = new Response(bin, {
+    headers: {
+      "Content-Type": audioEncoding === "MP3" ? "audio/mpeg"
+                   : audioEncoding === "OGG_OPUS" ? "audio/ogg"
+                   : "application/octet-stream",
+    }
+  });
+
+  // Spara i R2 om finns
+  if (env.BN_AUDIO) {
+    await env.BN_AUDIO.put(`tts/${cacheKey}.mp3`, bin, {
+      httpMetadata: { contentType: "audio/mpeg" }
+    });
+  }
+
+  // Lägg i edge cache
+  await cache.put(cacheReq, res.clone());
+
+  return addCacheHeaders(res);
+
+  // === helpers ===
+  function json(obj, status=200) {
+    return new Response(JSON.stringify(obj), {
+      status,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+  function clamp(v, min, max){ if (Number.isNaN(v)) return min; return Math.max(min, Math.min(max, v)); }
+  function base64ToUint8Array(b64){
+    const s = atob(b64);
+    const arr = new Uint8Array(s.length);
+    for (let i=0;i<s.length;i++) arr[i] = s.charCodeAt(i);
+    return arr;
+  }
+  async function sha1Hex(str){
+    const buf = new TextEncoder().encode(str);
+    const digest = await crypto.subtle.digest("SHA-1", buf);
+    const b = Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
+    return b;
+  }
+  function addCacheHeaders(r){
+    const h = new Headers(r.headers);
+    h.set("Cache-Control", "public, max-age=31536000, immutable");
+    return new Response(r.body, { status: r.status, headers: h });
+    }
+}
