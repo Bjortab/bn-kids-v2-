@@ -2,7 +2,7 @@
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const cors = {
+  const CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
   };
@@ -10,34 +10,32 @@ export async function onRequestPost(context) {
   try {
     const {
       text,
-      voice = {},               // { languageCode, name }
-      speakingRate = 1.0,       // 0.8–1.2 typ
-      pitch = 0.0,              // -20.0 – +20.0
-      volumeGainDb = 0.0,       // -96.0 – +16.0
-      audioProfile = "",        // t.ex. "earpiece-class-device"
-      audioEncoding = "MP3"     // MP3 eller LINEAR16
+      voice = {},
+      speakingRate = 1.0,
+      pitch = 0.0,
+      volumeGainDb = 0.0,
+      audioProfile = "",
+      audioEncoding = "MP3"
     } = await request.json();
 
     if (!env.GOOGLE_TTS_API_KEY) {
       return new Response(JSON.stringify({ ok: false, error: "Missing secret GOOGLE_TTS_API_KEY" }), {
-        status: 500, headers: { "content-type": "application/json", ...cors }
-      });
-    }
-    if (!text || !text.trim()) {
-      return new Response(JSON.stringify({ ok: false, error: "No text" }), {
-        status: 400, headers: { "content-type": "application/json", ...cors }
+        status: 500, headers: { "content-type": "application/json", ...CORS }
       });
     }
 
-    // Säkra defaults för svenska om inte UI skickar något.
-    const lang = voice.languageCode || "sv-SE";
-    // Bra standardröster: WaveNet-B (kvinna/varm), Neural2-A (man)
+    if (!text || !text.trim()) {
+      return new Response(JSON.stringify({ ok: false, error: "No text provided" }), {
+        status: 400, headers: { "content-type": "application/json", ...CORS }
+      });
+    }
+
+    const languageCode = voice.languageCode || "sv-SE";
     const name = voice.name || "sv-SE-Wavenet-B";
 
-    // Bygg request till Google TTS v1 (API key-läge – enkelt och stabilt).
     const payload = {
       input: { text },
-      voice: { languageCode: lang, name },
+      voice: { languageCode, name },
       audioConfig: {
         audioEncoding,
         speakingRate,
@@ -57,27 +55,26 @@ export async function onRequestPost(context) {
     if (!gRes.ok) {
       const errText = await gRes.text().catch(() => "");
       return new Response(JSON.stringify({ ok: false, error: `Google TTS ${gRes.status}`, details: errText }), {
-        status: 502, headers: { "content-type": "application/json", ...cors }
+        status: 502, headers: { "content-type": "application/json", ...CORS }
       });
     }
 
     const data = await gRes.json();
     if (!data.audioContent) {
-      return new Response(JSON.stringify({ ok: false, error: "No audioContent from Google" }), {
-        status: 502, headers: { "content-type": "application/json", ...cors }
+      return new Response(JSON.stringify({ ok: false, error: "No audioContent returned" }), {
+        status: 502, headers: { "content-type": "application/json", ...CORS }
       });
     }
 
-    // Returnera base64 till frontenden; den gör Blob -> audio.src.
     return new Response(JSON.stringify({
       ok: true,
       contentType: audioEncoding === "LINEAR16" ? "audio/wav" : "audio/mpeg",
       audioBase64: data.audioContent
-    }), { headers: { "content-type": "application/json", ...cors } });
+    }), { headers: { "content-type": "application/json", ...CORS } });
 
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: err?.message || String(err) }), {
-      status: 500, headers: { "content-type": "application/json", ...cors }
+      status: 500, headers: { "content-type": "application/json", ...CORS }
     });
   }
 }
