@@ -1,144 +1,99 @@
-// app.js – BN Kids v2 frontend
-const el = (id) => document.getElementById(id);
+// === Konfigurera så det matchar classic ===
+const STORY_URL = "/api/story";   // ÄNDRA vid behov: "/story"
+const TTS_URL   = "/api/tts_vertex"; // pekar på vår nya Google-TTS endpoint
 
-const age = el('age');
-const hero = el('hero');
-const promptBox = el('prompt');
+// === Hjälpare ===
+const $ = (id) => document.getElementById(id);
+const showSpinner = (b) => { $('spinner').style.display = b ? 'flex' : 'none'; };
+const showErr = (msg) => { const e=$('error'); e.style.display='block'; e.textContent=msg; };
+const clearErr = () => { const e=$('error'); e.style.display='none'; e.textContent=''; };
+const getForm = () => ({
+  age: $('age').value,
+  hero: $('hero').value.trim(),
+  prompt: $('prompt').value.trim(),
+  voice: $('voice').value,
+  rate: parseFloat($('rate').value || "1.0"),
+  pitch: parseFloat($('pitch').value || "0")
+});
 
-const voice = el('voice');
-const rate = el('rate');
-const pitch = el('pitch');
-const gain = el('gain');
-const pitchVal = el('pitchVal');
-const gainVal = el('gainVal');
-
-const btnSpeak = el('btnSpeak');
-const btnMake  = el('btnMake');
-const btnPlay  = el('btnPlay');
-const btnTest  = el('btnTest');
-
-const spin  = el('spin');
-const status = el('status');
-const out = el('out');
-const audio = el('audio');
-
-let lastAudioBlob = null;
-let currentText = "";
-
-// UI helpers
-function working(on, msg="Arbetar …") {
-  spin.style.display = on ? 'inline-flex' : 'none';
-  btnMake.disabled = on;
-  btnTest.disabled = on;
-  btnSpeak.disabled = on;
-  status.textContent = on ? msg : "";
+// Render story
+function renderStory(text){
+  $('story').classList.remove('muted');
+  $('story').textContent = text || '';
 }
 
-function showError(e) {
-  console.error(e);
-  status.innerHTML = `<span style="color:#ff8a8a">Fel: ${typeof e==='string'?e:(e.message||'okänt fel')}</span>`;
+// Play audio blob
+async function playBlob(blob){
+  const url = URL.createObjectURL(blob);
+  $('audio').src = url;
+  $('audio').play().catch(()=>{ /* user gesture */ });
 }
 
-// live labels
-pitch.addEventListener('input', () => pitchVal.textContent = `${pitch.value} st`);
-gain.addEventListener('input', () => gainVal.textContent = `${gain.value} dB`);
-
-// ---- SPEAK PLACEHOLDER (tills vi kopplar STT) ----
-btnSpeak.addEventListener('click', () => {
-  alert('Tala in kommer strax (vi kopplar Google STT). Skriv gärna gnistan så länge ✨');
-});
-
-// ---- TESTA RÖST ----
-btnTest.addEventListener('click', async () => {
+async function createStory(payload){
+  clearErr(); showSpinner(true);
   try {
-    working(true, 'Skapar teströst …');
-    const body = {
-      text: "Hej! Jag är din högläsningsröst i BN Kids.",
-      voice: voice.value || undefined,
-      rate: parseFloat(rate.value),
-      pitch: parseFloat(pitch.value),
-      gainDb: parseFloat(gain.value)
-    };
-    const res = await fetch('/tts', {
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body: JSON.stringify(body)
+    const r = await fetch(STORY_URL, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
     });
-    if(!res.ok){
-      const t = await res.text();
-      throw new Error(`TTS ${res.status}: ${t}`);
-    }
-    const blob = await res.blob();
-    lastAudioBlob = blob;
-    audio.src = URL.createObjectURL(blob);
-    audio.play().catch(()=>{});
-    btnPlay.disabled = false;
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    renderStory(data.story || data.text || "");
+    return (data.story || data.text || "");
   } catch (e) {
-    showError(e);
+    showErr("Kunde inte skapa saga:\n" + e.message);
+    return "";
   } finally {
-    working(false);
+    showSpinner(false);
   }
-});
+}
 
-// ---- SKAPA SAGA + UPPLÄSNING ----
-btnMake.addEventListener('click', async () => {
+async function speak(text, opts){
+  if(!text) { showErr("Ingen text att läsa upp."); return; }
+  clearErr(); showSpinner(true);
   try {
-    working(true, 'Skapar saga …');
-    status.textContent = 'Skapar saga …';
-
-    // 1) Generera saga
-    const storyRes = await fetch('/api/generate_story', {
-      method: 'POST',
-      headers: {'content-type':'application/json'},
+    const r = await fetch(TTS_URL, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        age: age.value,
-        hero: hero.value.trim() || null,
-        prompt: promptBox.value.trim() || null
+        text,
+        voice: opts.voice,
+        speakingRate: opts.rate,
+        pitch: opts.pitch,
+        audioEncoding: "MP3"
       })
     });
-    if(!storyRes.ok){
-      const t = await storyRes.text();
-      throw new Error(`Story ${storyRes.status}: ${t}`);
+    if(!r.ok){
+      let t=""; try{t=await r.text();}catch{}
+      throw new Error(t || `HTTP ${r.status}`);
     }
-    const { ok, story, error } = await storyRes.json();
-    if(!ok) throw new Error(error || 'Kunde inte skapa berättelse');
-
-    currentText = story;
-    out.textContent = story;
-
-    // 2) TTS (Google)
-    status.textContent = 'Skapar uppläsning …';
-    const ttsRes = await fetch('/tts', {
-      method: 'POST',
-      headers: {'content-type':'application/json'},
-      body: JSON.stringify({
-        text: story,
-        voice: voice.value || undefined,
-        rate: parseFloat(rate.value),
-        pitch: parseFloat(pitch.value),
-        gainDb: parseFloat(gain.value)
-      })
-    });
-    if(!ttsRes.ok){
-      const t = await ttsRes.text();
-      throw new Error(`TTS ${ttsRes.status}: ${t}`);
-    }
-    const blob = await ttsRes.blob();
-    lastAudioBlob = blob;
-    audio.src = URL.createObjectURL(blob);
-    await audio.play().catch(()=>{});
-    btnPlay.disabled = false;
-    status.textContent = 'Klart!';
-  } catch (e) {
-    showError(e);
+    const blob = await r.blob();
+    await playBlob(blob);
+  } catch (e){
+    showErr("TTS fel:\n" + e.message);
   } finally {
-    working(false);
+    showSpinner(false);
   }
-});
+}
 
-// ---- SPELA IGEN ----
-btnPlay.addEventListener('click', () => {
-  if(lastAudioBlob){
-    audio.play().catch(()=>{});
-  }
-});
+// === Knappar ===
+$('btnCreateRead').onclick = async () => {
+  const f = getForm();
+  const story = await createStory({ prompt: f.prompt, age: f.age, hero: f.hero });
+  if (story) await speak(story, f);
+};
+
+$('btnSpeakOnly').onclick = async () => {
+  const f = getForm();
+  const story = $('story').textContent.trim();
+  await speak(story, f);
+};
+
+$('btnTestVoice').onclick = async () => {
+  const f = getForm();
+  await speak("Detta är ett röstprov i BN Kids.", f);
+};
+
+// (Micken/“Tala in”-knappen kopplas senare, lämnas tom för nu)
+// $('btnSpeak').onclick = () => {};
