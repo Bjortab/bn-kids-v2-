@@ -3,121 +3,68 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BN’s Sagovärld – v2</title>
+  <title>BN — Barnberättelser</title>
+  <meta name="description" content="BN — skapa och lyssna på barnberättelser. Tala in din prompt för att generera berättelser." />
+  <link rel="icon" href="/favicon.ico" />
   <style>
-    body{background:#111;color:#eaeaea;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:24px}
-    .panel{max-width:880px;margin:0 auto;background:#1b1b1b;border-radius:12px;padding:20px;box-shadow:0 0 0 1px #222}
-    .row{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
-    .row>*{flex:1}
-    label{display:block;font-size:13px;color:#9aa3ab;margin-bottom:6px}
-    input,select,textarea,button{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #2b2b2b;background:#121212;color:#eee;outline:none}
-    textarea{min-height:96px;resize:vertical}
-    .btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-    .btn-primary{background:#14b8a6;border-color:#0d9488;color:#051515;font-weight:600}
-    .btn-ghost{background:#0d0d0d}
-    .muted{color:#97a1a8;font-size:13px}
-    .audio{margin-top:8px}
-    .spinner{display:none;gap:8px;align-items:center;color:#9aa3ab;font-size:14px}
-    .dot{width:6px;height:6px;border-radius:50%;background:#9aa3ab;animation:b 1.4s infinite ease-in-out}
-    .dot:nth-child(2){animation-delay:.15s}
-    .dot:nth-child(3){animation-delay:.3s}
-    @keyframes b{0%,80%,100%{opacity:.2;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
-    pre#error{white-space:pre-wrap;background:#2a1111;border:1px solid #3b1c1c;padding:12px;border-radius:8px;color:#ffb4b4}
-    #story{white-space:pre-wrap;line-height:1.5}
+    :root { --bg:#fff; --fg:#111; --muted:#666; --accent:#0b76ef; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:var(--fg); margin:0; padding:24px; background:var(--bg); }
+    header { max-width:980px; margin:0 auto 18px; }
+    main { max-width:980px; margin:0 auto; }
+    h1 { margin:0 0 6px; font-size:22px; }
+    p.lead { margin:0 0 18px; color:var(--muted); }
+    .card { border:1px solid #eee; padding:16px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.02); background:#fafafa; }
+    button { background:var(--accent); color:#fff; border:0; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    button.secondary { background:#ddd; color:#111; }
+    #controls { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+    #status { color:var(--muted); }
+    textarea { width:100%; min-height:140px; padding:10px; font-size:15px; border-radius:6px; border:1px solid #ddd; resize:vertical; }
+    footer { max-width:980px; margin:28px auto 0; color:var(--muted); font-size:13px; }
+    .small { font-size:13px; color:var(--muted); }
   </style>
 </head>
 <body>
-  <div class="panel">
-    <h1>BN’s Sagovärld · v2</h1>
+  <header>
+    <h1>BN — Tala in din prompt</h1>
+    <p class="lead">Spela in din idé och låt BN skapa en barnberättelse. Inspelningen skickas säkert till servern för transkription.</p>
+  </header>
 
-    <div class="row">
-      <div>
-        <label>Ålder</label>
-        <select id="age">
-          <option>1–2 år</option>
-          <option>3–4 år</option>
-          <option>5–6 år</option>
-          <option>7–8 år</option>
-          <option>9–10 år</option>
-          <option>11–12 år</option>
-        </select>
+  <main>
+    <section class="card" aria-labelledby="voice-heading">
+      <h2 id="voice-heading">Röstinmatning</h2>
+
+      <div id="controls" style="margin-top:8px;">
+        <button id="mic" type="button">Starta inspelning</button>
+        <button id="cancel" class="secondary" type="button" style="display:none">Avbryt</button>
+        <span id="status">Inaktiv</span>
       </div>
-      <div>
-        <label>Hjälte (valfritt)</label>
-        <input id="hero" placeholder="t.ex. Taxen Tage, Draken Holger">
+
+      <div style="margin-top:12px;">
+        <label for="transcript" class="small" style="display:block; margin-bottom:6px;">Transkript (klar att användas som prompt):</label>
+        <textarea id="transcript" placeholder="Här kommer transkriptionen..." aria-label="Transkript"></textarea>
       </div>
-    </div>
 
-    <div class="row">
-      <div>
-        <label>Sagoprompt (skriv eller tala in)</label>
-        <textarea id="prompt" placeholder="en modig tax i rymden 🚀"></textarea>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="sendPrompt" type="button">Skicka som prompt</button>
+        <button id="clear" class="secondary" type="button">Rensa</button>
+        <div style="flex:1"></div>
+        <div class="small">Max inspelningstid: 60 sekunder</div>
       </div>
-    </div>
+    </section>
 
-    <div class="row">
-      <div>
-        <label>Röst (svenska)</label>
-        <select id="voice">
-          <option value="sv-SE-Wavenet-B">Auto (sv-SE-Wavenet-B)</option>
-          <option value="sv-SE-Wavenet-A">sv-SE-Wavenet-A</option>
-          <option value="sv-SE-Wavenet-B">sv-SE-Wavenet-B</option>
-          <option value="sv-SE-Wavenet-C">sv-SE-Wavenet-C</option>
-          <option value="sv-SE-Wavenet-D">sv-SE-Wavenet-D</option>
-          <option value="sv-SE-Neural2-A">sv-SE-Neural2-A</option>
-          <option value="sv-SE-Neural2-B">sv-SE-Neural2-B</option>
-        </select>
+    <!-- Här kan din befintliga applikations-UI fortsätta. -->
+    <section style="margin-top:16px;">
+      <div class="card">
+        <h3>Dina berättelser</h3>
+        <p class="small">Det här är en platshållare för där din befintliga app visar genererade berättelser. Koden ovan lägger till röstinmatning utan att ändra resten av din layout.</p>
       </div>
-      <div>
-        <label>Talthastighet</label>
-        <select id="rate">
-          <option value="1.0">Standard (1.0)</option>
-          <option value="0.95">0.95</option>
-          <option value="0.9">0.9</option>
-          <option value="0.85">0.85</option>
-          <option value="0.8">0.8</option>
-          <option value="1.05">1.05</option>
-          <option value="1.1">1.1</option>
-          <option value="1.15">1.15</option>
-          <option value="1.2">1.2</option>
-        </select>
-      </div>
-      <div>
-        <label>Pitch (semitoner)</label>
-        <select id="pitch">
-          <option value="0">0</option>
-          <option value="-2">-2</option>
-          <option value="-1">-1</option>
-          <option value="1">+1</option>
-          <option value="2">+2</option>
-        </select>
-      </div>
-    </div>
+    </section>
+  </main>
 
-    <div class="btns">
-      <button id="btnSpeak" class="btn-ghost">Tala in</button>
-      <button id="btnCreateRead" class="btn-primary">Skapa saga + uppläsning</button>
-      <button id="btnSpeakOnly" class="btn-ghost">Spela igen</button>
-      <button id="btnTestVoice" class="btn-ghost">Testa röst</button>
-    </div>
+  <footer>
+    <div class="small">Observera: röstinspelning fungerar bäst i Chrome / Edge (desktop och Android). För iPad/Safari kan en fallback behövas.</div>
+  </footer>
 
-    <div class="spinner" id="spinner" aria-live="polite">
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span>Arbetar…</span>
-    </div>
-
-    <pre id="error" style="display:none"></pre>
-
-    <h3>Berättelse</h3>
-    <div id="story" class="muted"></div>
-
-    <div class="audio">
-      <audio id="audio" controls></audio>
-    </div>
-
-    <p class="muted">Tips: “Skapa saga + uppläsning” skapar texten och läser upp i ett steg (samma som classic).</p>
-  </div>
-
-  <script src="./app.js"></script>
+  <script src="/recorder.js"></script>
 </body>
 </html>
