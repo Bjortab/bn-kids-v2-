@@ -1,8 +1,10 @@
-// Pages Function: ta emot multipart/form-data med 'file' och vidarebefordra till OpenAI Whisper.
-// Kräver att du sätter OPENAI_API_KEY som secret i Pages (Settings -> Variables & Secrets).
+// functions/api/transcribe.js
+// Cloudflare Pages Function som tar emot multipart/form-data med 'file' och vidarebefordrar till OpenAI Whisper.
+// Konfigurera OPENAI_API_KEY i Pages -> Settings -> Variables & Secrets (namn: OPENAI_API_KEY)
+
 export default {
   async fetch(request, env) {
-    // Hantera preflight (CORS) för fetch från klienten
+    // Hantera preflight CORS
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -41,9 +43,8 @@ export default {
     }
 
     try {
-      // Bygg vidarebefordran till OpenAI (multipart/form-data)
+      // Bygg FormData för vidarebefordran
       const forward = new FormData();
-      // file kan vara en Blob/File från request.formData()
       forward.append('file', file, 'recording.webm');
       forward.append('model', 'whisper-1');
 
@@ -51,7 +52,7 @@ export default {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${OPENAI_KEY}`,
-          // Låt fetch/FormData sätta Content-Type (boundary) automatiskt
+          // Låt fetch/FormData sätta content-type/boundary
         },
         body: forward,
       });
@@ -59,7 +60,6 @@ export default {
       const respText = await resp.text();
       const contentTypeResp = resp.headers.get('content-type') || 'application/json';
 
-      // Framåtreturnera OpenAI:s svar (samma statuskod)
       return new Response(respText, {
         status: resp.status,
         headers: {
